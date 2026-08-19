@@ -1,0 +1,66 @@
+# פייפליין GitLab CI/CD (ב-GitLab זה נקרא "CI/CD pipeline", לא "Action" - זה
+# המונח המקביל ב-GitHub. הקובץ הזה, בשם ובנתיב האלה בדיוק (.gitlab-ci.yml
+# בשורש המאגר), הוא כל מה שצריך - GitLab מזהה אותו אוטומטית בכל push.
+#
+# הפייפליין משתמש בתמונת Docker הרשמית של Gradle (כוללת את Gradle עצמו,
+# כך שאין צורך לצרף/לתחזק gradle-wrapper.jar בינארי במאגר), ומתקין בתוכה
+# את Android SDK הדרוש (פעם ראשונה איטית יותר; משם והלאה נשמר ב-cache).
+#
+# פלט: APK דיבאג מותקן (app-debug.apk), מוכן להעברה למכשיר בהתקנה ידנית
+# (side-load) - בדיוק כמו שמתואר ב-README. זה *לא* APK חתום ל-release
+# (release חתום דורש keystore נפרד - אם תרצו את זה בעתיד, תגידו ואוסיף שלב).
+
+image: gradle:7.6.4-jdk17
+
+variables:
+  ANDROID_COMPILE_SDK: "33"
+  ANDROID_BUILD_TOOLS: "33.0.2"
+  # גרסת ה-cmdline-tools להורדה מגוגל. אם ה-URL הזה יחדל לעבוד בעתיד (גוגל
+  # מדי פעם מעדכנים את מספר הגרסה בשם הקובץ), פשוט קחו קישור עדכני מתוך
+  # https://developer.android.com/studio#command-line-tools-only ועדכנו כאן.
+  ANDROID_CMDLINE_TOOLS_VERSION: "11076708"
+  ANDROID_SDK_ROOT: "$CI_PROJECT_DIR/android-sdk"
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-cache"
+
+# שומרים בין ריצות כדי שההורדה של Android SDK ותלויות Gradle לא יקרו
+# מאפס בכל push - חוסך המון זמן מריצה שנייה ואילך.
+cache:
+  key: android-sdk-and-gradle-cache
+  paths:
+    - android-sdk/
+    - .gradle-cache/
+
+stages:
+  - build
+
+before_script:
+  # unzip ו-wget לא כלולים בתמונת ה-gradle הבסיסית
+  - apt-get update -qq && apt-get install -qq -y wget unzip > /dev/null
+  - |
+    if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+      mkdir -p "$ANDROID_SDK_ROOT"
+      wget -q "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}_latest.zip" -O /tmp/cmdline-tools.zip
+      unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools-extracted
+      mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+      mv /tmp/cmdline-tools-extracted/cmdline-tools/* "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
+    fi
+  - export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools"
+  - yes | sdkmanager --licenses > /dev/null 2>&1 || true
+  - sdkmanager "platform-tools" "platforms;android-${ANDROID_COMPILE_SDK}" "build-tools;${ANDROID_BUILD_TOOLS}" > /dev/null
+
+# minSdk/targetSdk = 19 (אנדרואיד 4.4 KitKat) מוגדרים בקוד עצמו
+# (app/build.gradle) ולא כאן - ה-CI רק מקמפל, לא משנה את גרסת היעד.
+assembleDebug:
+  stage: build
+  script:
+    - export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools"
+    - gradle assembleDebug --stacktrace --console=plain
+  artifacts:
+    name: "babysitter-debug-apk"
+    paths:
+      - app/build/outputs/apk/debug/app-debug.apk
+    expire_in: 30 days
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'

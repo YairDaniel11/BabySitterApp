@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- מכשיר מקשים ללא מסך מגע: חובה להצהיר שהמסך אינו חובה, אחרת
+         בברירת המחדל אנדרואיד מניח שכל אפליקציה דורשת touchscreen ועלול
+         לחסום התקנה/הפעלה במכשיר כזה. -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="true" />
+    <uses-feature android:name="android.hardware.telephony" android:required="true" />
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- דרוש כדי לעקוב אחרי מצב השיחה (מחייג/מצלצל/מחובר/הסתיים) - זה מה
+         שמאפשר: לזהות "אין מענה" ולחייג למספר השני, לזהות שיחה נכנסת
+         כדי לענות עליה אוטומטית, ולהחזיר את ההאזנה מיד כשהשיחה מסתיימת
+         (במקום לחכות עד להפעלה מחדש ידנית - זה מה שתיקן את הבאג). -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- מגרסת אנדרואיד 10 ואילך, מספר השיחה הנכנסת (הדרוש כדי להשוות מול
+         רשימת המספרים למענה אוטומטי) לא מועבר בלי ההרשאה הזו בנוסף
+         ל-READ_PHONE_STATE. -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+
+    <!-- מאפשרת לענות אוטומטית לשיחה נכנסת דרך ה-API הרשמי (TelephonyManager
+         .acceptRingingCall) בגרסאות אנדרואיד 8+. במכשיר היעד (אנדרואיד ישן
+         עם מקשים) זה כנראה לא קיים, ואז נופלים חזרה לשיטה הישנה - ראו הערה
+         ב-CryDetectionService. -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+
+    <!-- דרוש כדי להעביר שיחות לרמקול ולשלוט בעוצמת קול השיחה (הרשאה רגילה,
+         ניתנת אוטומטית בהתקנה - לא דורשת דיאלוג). -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".CryDetectionService"
+            android:enabled="true"
+            android:exported="false" />
+
+    </application>
+
+</manifest>

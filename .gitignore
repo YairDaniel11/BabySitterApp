@@ -1,0 +1,21 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# מכיל נתיב SDK מקומי של המחשב שלך - אף פעם לא לשתף/להעלות
+local.properties
+
+# חבילת Android SDK שמורדת ע"י ה-CI (ראו .gitlab-ci.yml) - לא חלק מהקוד
+android-sdk/
+
+# חתימות/keystore - אם בעתיד תוסיפו חתימת release, לעולם לא להעלות את הקובץ עצמו
+*.jks
+*.keystore

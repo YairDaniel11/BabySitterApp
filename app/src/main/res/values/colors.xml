@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- פלטת הצבעים הזו מבוססת על מה שנמצא בפועל באפליקציה אמיתית שרצה על
+         מכשיר שיאומי מקשים: רקע כהה, header שחור עם רצועת אקסנט טורקיז,
+         טקסט לבן/אפור בהיר. עיצוב שטוח לגמרי, בלי צללים/גרדיאנטים. -->
+    <color name="bg_dark">#FF2B2E33</color>
+    <color name="header_black">#FF000000</color>
+    <color name="accent_teal">#FF00BCD4</color>
+    <color name="text_white">#FFFFFFFF</color>
+    <color name="text_light_gray">#FFCCCCCC</color>
+    <color name="divider_gray">#FF444444</color>
+    <color name="row_gray">#FF3A3E44</color>
+</resources>

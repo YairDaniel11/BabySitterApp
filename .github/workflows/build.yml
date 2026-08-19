@@ -1,0 +1,104 @@
+# פייפליין GitHub Actions (המקביל הישיר ל-.gitlab-ci.yml שבשורש הפרויקט).
+# ב-GitHub זה נקרא "Actions" ולא "CI/CD pipeline" (מונח של GitLab), ומוגדר
+# ע"י קובץ YAML בנתיב הקבוע .github/workflows/<שם כלשהו>.yml - GitHub מזהה
+# ומריץ אותו אוטומטית על כל push, בדיוק כמו .gitlab-ci.yml ב-GitLab.
+#
+# הפייפליין הזה עושה בדיוק את מה ש-.gitlab-ci.yml עושה (אותה תמונת Docker,
+# אותו תהליך הורדת Android SDK, אותו gradle assembleDebug) - כדי שהתוצאה
+# תהיה זהה בין שני השירותים. ההבדל היחיד: בסיום, במקום Artifact זמני
+# (שנמחק אחרי זמן מה), ה-APK מצורף ל-GitHub Release קבוע שנשאר במאגר לתמיד
+# בעמוד "Releases", ואפשר להוריד ממנו בכל שלב.
+
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch: {}
+  # מאפשר גם הרצה ידנית מהטאב "Actions" במאגר, בלי לחכות ל-push - שימושי
+  # לבדיקה חד-פעמית או לבנייה מחדש בלי לשנות קוד.
+
+# GITHUB_TOKEN (ניתן אוטומטית ע"י GitHub לכל הרצה) צריך הרשאת כתיבה כדי
+# שנוכל ליצור Release חדש במאגר בסיום הבנייה.
+permissions:
+  contents: write
+
+jobs:
+  assembleDebug:
+    runs-on: ubuntu-latest
+
+    # אותה תמונת Docker הרשמית של Gradle שמשמשת ב-.gitlab-ci.yml - כך שאין
+    # תלות בגרסת Gradle/JDK שמותקנת (או לא מותקנת) מראש על ה-runner של
+    # GitHub, ותוצאת הבנייה זהה בין שני השירותים.
+    container:
+      image: gradle:7.6.4-jdk17
+
+    env:
+      ANDROID_COMPILE_SDK: "33"
+      ANDROID_BUILD_TOOLS: "33.0.2"
+      # אם ה-URL הזה יחדל לעבוד בעתיד (גוגל מדי פעם מעדכנים את מספר הגרסה
+      # בשם הקובץ), פשוט קחו קישור עדכני מתוך
+      # https://developer.android.com/studio#command-line-tools-only ועדכנו כאן.
+      ANDROID_CMDLINE_TOOLS_VERSION: "11076708"
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # שומר בין ריצות כדי שהורדת Android SDK ותלויות Gradle לא יקרו מאפס
+      # בכל push - בדיוק כמו ה-cache שמוגדר ב-.gitlab-ci.yml.
+      - name: Cache Android SDK + Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ANDROID_SDK_ROOT }}
+            ${{ env.GRADLE_USER_HOME }}
+          key: android-sdk-and-gradle-cache-${{ runner.os }}
+
+      - name: Install Android SDK
+        run: |
+          apt-get update -qq && apt-get install -qq -y wget unzip > /dev/null
+          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+            mkdir -p "$ANDROID_SDK_ROOT"
+            wget -q "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}_latest.zip" -O /tmp/cmdline-tools.zip
+            unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools-extracted
+            mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+            mv /tmp/cmdline-tools-extracted/cmdline-tools/* "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
+          fi
+          export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools"
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-${ANDROID_COMPILE_SDK}" "build-tools;${ANDROID_BUILD_TOOLS}" > /dev/null
+
+      # minSdk/targetSdk = 19 (אנדרואיד 4.4 KitKat) מוגדרים בקוד עצמו
+      # (app/build.gradle) ולא כאן - ה-CI רק מקמפל, לא משנה את גרסת היעד.
+      - name: Build debug APK
+        run: |
+          export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools"
+          gradle assembleDebug --stacktrace --console=plain
+
+      # תמיד נשמר כ-Artifact רגיל של ההרצה (30 יום, כמו ב-GitLab) - שימושי
+      # לבדיקה מהירה של הרצת PR למשל, גם בלי ליצור Release.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: babysitter-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      # יוצר GitHub Release קבוע (נשאר במאגר לתמיד, בעמוד "Releases") רק
+      # כשהבנייה רצה בעקבות push בפועל (לא כשמישהו מריץ ידנית מה-Actions
+      # tab דרך workflow_dispatch, כדי לא ליצור Release ריק/כפול בטעות).
+      # כל הרצה מקבלת תגית ייחודית משלה (מבוססת על מספר ההרצה), כך שאין
+      # התנגשות בין Release-ים גם אם רצים כמה build ברצף.
+      - name: Create GitHub Release with APK
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "בייביסיטר טלפוני - build #${{ github.run_number }}"
+          body: |
+            APK דיבאג שנבנה אוטומטית מקומיט ${{ github.sha }}.
+            לא APK חתום ל-release רשמי (release חתום דורש keystore נפרד).
+          files: app/build/outputs/apk/debug/app-debug.apk

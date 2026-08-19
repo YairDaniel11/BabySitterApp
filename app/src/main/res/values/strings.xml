@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">בייביסיטר טלפוני</string>
+    <string name="phone_label">מספר טלפון להתקשרות (הורה ראשי)</string>
+    <string name="phone_secondary_label">מספר טלפון נוסף (יחויג אם הראשון לא עונה - אופציונלי)</string>
+    <string name="pick_contact">אנשי קשר</string>
+    <string name="contact_pick_error">לא הצלחתי לקרוא את המספר מאיש הקשר שנבחר</string>
+
+    <string name="auto_answer_section_title">מענה אוטומטי לשיחות נכנסות</string>
+    <string name="auto_answer_enabled">אפשר מענה אוטומטי משיחות ממספרים מוגדרים</string>
+    <string name="auto_answer_numbers_label">מספרים למענה אוטומטי, מופרדים בפסיק (ריק = להשתמש במספרים שהוגדרו למעלה)</string>
+    <string name="auto_answer_speaker">מענה אוטומטי ברמקול (כדי לשמוע טוב יותר את החדר)</string>
+
+    <string name="audio_section_title">הגדרות שמע לשיחות</string>
+    <string name="all_calls_speaker">כל השיחות (יוצאות ונענות) ברמקול</string>
+    <string name="mute_incoming_voice">השתק את קול השיחה הנכנסת (כדי שההורה לא יישמע בחדר)</string>
+    <string name="mute_ringer_while_active">השתק צלצול שיחות בזמן שהאפליקציה מאזינה</string>
+
+    <string name="sensitivity_label">רגישות לזיהוי בכי</string>
+    <string name="sensitivity_high">רגיש מאוד (כל רעש קטן)</string>
+    <string name="sensitivity_medium">רגיל</string>
+    <string name="sensitivity_low">פחות רגיש (רק רעש חזק)</string>
+    <string name="start_listening">התחל האזנה (מצב חדר הילדים)</string>
+    <string name="stop_listening">עצור האזנה</string>
+    <string name="status_idle">מצב: כבוי</string>
+    <string name="status_listening">מצב: מאזין לרעש/בכי...</string>
+    <string name="notification_title">בייביסיטר פעיל</string>
+    <string name="notification_text">מאזין לחדר הילדים</string>
+</resources>

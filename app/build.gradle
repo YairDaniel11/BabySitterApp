@@ -1,0 +1,33 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.babysitter.app'
+    compileSdk 33
+
+    defaultConfig {
+        applicationId "com.babysitter.app"
+        // minSdk 19 = Android 4.4 KitKat, כדי לתמוך גם במכשירי שיאומי ישנים (מקשים)
+        minSdk 19
+        // targetSdk זהה ל-minSdk בכוונה - זו בדיוק ההגדרה שנמצאה באפליקציה אמיתית
+        // ומוכחת שעובדת על אותו סוג מכשיר (שיאומי מקשים).
+        targetSdk 19
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+// הוסרו תלויות AndroidX/AppCompat: בדיקה של שתי אפליקציות אמיתיות שעובדות
+// על מכשירי שיאומי מקשים (כולל אפליקציית ניהול ותיקה ומוכחת) העלתה ששתיהן
+// נמנעות לגמרי מ-AndroidX ומשתמשות ב-Activity רגיל + ה-theme הגולמי של
+// הפלטפורמה. זה גם מפשט את הבנייה (פחות תלויות להוריד מ-Maven).

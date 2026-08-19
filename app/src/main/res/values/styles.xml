@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- android:Theme (theme פלטפורמה גולמי, לא AppCompat/Material) - בדיוק מה ששתי
+         האפליקציות האמיתיות שנבדקו על מכשיר שיאומי מקשים משתמשות בו. זה גם התאור
+         הכהה הקלאסי (רקע שחור, טקסט לבן) שמתאים למוסכמת העיצוב שנמצאה שם. -->
+    <style name="AppTheme" parent="android:Theme">
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

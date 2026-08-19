@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- עיצוב כהה, שטוח, ניגודיות גבוהה - בהתאם למוסכמת העיצוב שנמצאה באפליקציה
+     אמיתית שרצה בפועל על מכשיר שיאומי מקשים (header שחור + אקסנט טורקיז,
+     טקסט לבן, ללא Material/צללים). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark">
+
+    <!-- רצועת כותרת עליונה: שחור + אקסנט טורקיז, בדיוק כמו באפליקציה שנבדקה -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/header_black">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/accent_teal"
+            android:textColor="@color/text_white"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:padding="12dp"
+            android:text="@string/app_name" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/accent_teal"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:paddingBottom="20dp"
+                android:text="@string/status_idle" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_light_gray"
+                android:textSize="16sp"
+                android:text="@string/phone_label" />
+
+            <!-- שדה טקסט למספר טלפון - עובד עם מקלדת מקשים פיזית רגילה
+                 (inputType=phone פותח לוח מקשים מספרי גם במכשירים ללא מגע).
+                 מקש "חזרה" (Back) בזמן שהשדה הזה בפוקוס מוגדר בקוד
+                 (MainActivity.onKeyDown) למחוק ספרה אחרונה במקום לצאת
+                 מהאפליקציה.
+                 כפתור "אנשי קשר" לצידו פותח את בורר אנשי הקשר של המכשיר
+                 (ContactPicker) כדי שלא יהיה צורך להקליד את המספר ידנית. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/phoneNumberInput"
+                    android:layout_width="0dp"
+                    android:layout_height="52dp"
+                    android:layout_weight="1"
+                    android:textColor="@color/text_white"
+                    android:textColorHint="@color/text_light_gray"
+                    android:background="@color/row_gray"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:textSize="18sp"
+                    android:inputType="phone"
+                    android:nextFocusDown="@id/phoneContactButton"
+                    android:hint="0501234567" />
+
+                <Button
+                    android:id="@+id/phoneContactButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="52dp"
+                    android:layout_marginStart="8dp"
+                    android:minWidth="0dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:background="@color/accent_teal"
+                    android:textColor="@color/text_white"
+                    android:textSize="14sp"
+                    android:nextFocusDown="@id/secondaryPhoneNumberInput"
+                    android:text="@string/pick_contact" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_light_gray"
+                android:textSize="16sp"
+                android:paddingTop="16dp"
+                android:text="@string/phone_secondary_label" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/secondaryPhoneNumberInput"
+                    android:layout_width="0dp"
+                    android:layout_height="52dp"
+                    android:layout_weight="1"
+                    android:textColor="@color/text_white"
+                    android:textColorHint="@color/text_light_gray"
+                    android:background="@color/row_gray"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:textSize="18sp"
+                    android:inputType="phone"
+                    android:nextFocusDown="@id/secondaryContactButton"
+                    android:hint="0521234567 (רשות)" />
+
+                <Button
+                    android:id="@+id/secondaryContactButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="52dp"
+                    android:layout_marginStart="8dp"
+                    android:minWidth="0dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:background="@color/accent_teal"
+                    android:textColor="@color/text_white"
+                    android:textSize="14sp"
+                    android:nextFocusDown="@id/autoAnswerEnabledCheck"
+                    android:text="@string/pick_contact" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1px"
+                android:layout_marginTop="20dp"
+                android:background="@color/divider_gray" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/accent_teal"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:paddingTop="20dp"
+                android:paddingBottom="8dp"
+                android:text="@string/auto_answer_section_title" />
+
+            <CheckBox
+                android:id="@+id/autoAnswerEnabledCheck"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_white"
+                android:textSize="15sp"
+                android:nextFocusDown="@id/autoAnswerNumbersInput"
+                android:text="@string/auto_answer_enabled" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_light_gray"
+                android:textSize="14sp"
+                android:paddingTop="10dp"
+                android:text="@string/auto_answer_numbers_label" />
+
+            <!-- כפתור "אנשי קשר" כאן מוסיף (append) את המספר הנבחר לרשימה,
+                 מופרד בפסיק מהמספרים הקיימים - כי זה שדה של כמה מספרים יחד. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/autoAnswerNumbersInput"
+                    android:layout_width="0dp"
+                    android:layout_height="52dp"
+                    android:layout_weight="1"
+                    android:textColor="@color/text_white"
+                    android:textColorHint="@color/text_light_gray"
+                    android:background="@color/row_gray"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:textSize="16sp"
+                    android:inputType="phone"
+                    android:nextFocusDown="@id/autoAnswerContactButton"
+                    android:hint="0501234567,0521234567" />
+
+                <Button
+                    android:id="@+id/autoAnswerContactButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="52dp"
+                    android:layout_marginStart="8dp"
+                    android:minWidth="0dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:background="@color/accent_teal"
+                    android:textColor="@color/text_white"
+                    android:textSize="14sp"
+                    android:nextFocusDown="@id/autoAnswerSpeakerCheck"
+                    android:text="@string/pick_contact" />
+            </LinearLayout>
+
+            <CheckBox
+                android:id="@+id/autoAnswerSpeakerCheck"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:textColor="@color/text_white"
+                android:textSize="15sp"
+                android:nextFocusDown="@id/allCallsSpeakerCheck"
+                android:text="@string/auto_answer_speaker" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1px"
+                android:layout_marginTop="20dp"
+                android:background="@color/divider_gray" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/accent_teal"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:paddingTop="20dp"
+                android:paddingBottom="8dp"
+                android:text="@string/audio_section_title" />
+
+            <CheckBox
+                android:id="@+id/allCallsSpeakerCheck"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_white"
+                android:textSize="15sp"
+                android:nextFocusDown="@id/muteIncomingVoiceCheck"
+                android:text="@string/all_calls_speaker" />
+
+            <CheckBox
+                android:id="@+id/muteIncomingVoiceCheck"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_white"
+                android:textSize="15sp"
+                android:nextFocusDown="@id/muteRingerWhileActiveCheck"
+                android:text="@string/mute_incoming_voice" />
+
+            <CheckBox
+                android:id="@+id/muteRingerWhileActiveCheck"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_white"
+                android:textSize="15sp"
+                android:nextFocusDown="@id/sensitivityGroup"
+                android:text="@string/mute_ringer_while_active" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1px"
+                android:layout_marginTop="20dp"
+                android:background="@color/divider_gray" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_light_gray"
+                android:textSize="16sp"
+                android:paddingTop="20dp"
+                android:text="@string/sensitivity_label" />
+
+            <!-- שלוש אפשרויות בחירה במקום סליידר - הרבה יותר אמין לניווט
+                 עם חצים/מקשים במכשיר ללא מסך מגע (מעלה/מטה + כפתור בחירה) -->
+            <RadioGroup
+                android:id="@+id/sensitivityGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:nextFocusDown="@id/startStopButton">
+
+                <RadioButton
+                    android:id="@+id/sensitivityHigh"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:textColor="@color/text_white"
+                    android:textSize="16sp"
+                    android:text="@string/sensitivity_high" />
+
+                <RadioButton
+                    android:id="@+id/sensitivityMedium"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:textColor="@color/text_white"
+                    android:textSize="16sp"
+                    android:checked="true"
+                    android:text="@string/sensitivity_medium" />
+
+                <RadioButton
+                    android:id="@+id/sensitivityLow"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:textColor="@color/text_white"
+                    android:textSize="16sp"
+                    android:text="@string/sensitivity_low" />
+
+            </RadioGroup>
+
+            <Button
+                android:id="@+id/startStopButton"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:layout_marginTop="24dp"
+                android:background="@color/accent_teal"
+                android:textColor="@color/text_white"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:text="@string/start_listening" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>
