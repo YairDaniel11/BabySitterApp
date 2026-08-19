@@ -64,6 +64,41 @@ public class CryDetectionService extends Service {
     // לפי הצורך בפועל.
     private static final long ANSWER_TIMEOUT_MS = 15_000;
 
+    // *** מגבלת פלטפורמה חשובה (קריאה לפני שינוי הקבועים למטה) ***
+    // Android לא חושף לאפליקציות רגילות (שאינן אפליקציית החייגן/טלפוניה
+    // ברירת המחדל) שום API שמבדיל "ההורה ענה בפועל" מ"השיחה עברה לתא קולי".
+    // שני המצבים נראים מבחוץ בדיוק אותו הדבר - מעבר למצב OFFHOOK. אפילו
+    // ה"מצלצל" של שיחה יוצאת לא נחשף כמצב נפרד (CALL_STATE_RINGING מיועד
+    // רק לשיחות *נכנסות*) - כך שגם ה"אין מענה" הבסיסי הוא כבר הערכה, לא
+    // זיהוי ודאי. מה שאפשר לעשות זה לשפר את ההערכה עם איתות נוסף:
+    //
+    // אם שיחה מגיעה ל-OFFHOOK *מהר מאוד* אחרי שיזמנו אותה (הרבה לפני שהיו
+    // מספיק צלצולים כדי שאדם באמת יספיק לענות) - זה חשוד כדחייה מיידית
+    // שמנותבת ישר לתא קולי (או מכשיר כבוי/מחוץ לכיסוי שמנותב לתא קולי
+    // מהר). זה *לא* הוכחה, רק איתות נוסף - משלבים אותו עם משך ה-OFFHOOK
+    // הקיים ("אין מענה" אם קצר מדי בנוסף). זה לא יזהה במדויק 100% מהמקרים
+    // (למשל תא קולי שמנותב רק אחרי כמה צלצולים ייראה כמו "נענה"), אבל
+    // משפר משמעותית את הזיהוי עבור המקרה הנפוץ של דחייה יזומה.
+    private static final long FAST_CONNECT_SUSPICIOUS_MS = 3_000;
+
+    // --- שיפור זיהוי הרעש (סעיף ד') ---
+    // רעש רגעי בודד (טריקת דלת, שיעול, טלוויזיה) יכול לחצות את הסף לרגע
+    // אחד ולגרום לחיוג שווא. דורשים כמה דגימות רצופות מעל הסף (כל דגימה כל
+    // SAMPLE_INTERVAL_MS) לפני שמחשיבים את זה כבכי אמיתי ומחייגים - זה
+    // דורש רעש *מתמשך* של כ-1.4 שניות ומעלה, שמתאים הרבה יותר לבכי אמיתי
+    // מאשר רעש חד-פעמי, בלי לפגוע משמעותית בזמן התגובה.
+    private static final int REQUIRED_CONSECUTIVE_SAMPLES = 2;
+
+    // --- תיקון באג "מפסיק להתקשר אחרי חיוג ראשון" (סעיף ה') ---
+    // רואים תיעוד מלא של הבעיה וההסבר לתיקון בהערה מעל checkAmplitude()
+    // ובהערה מעל watchdogRunnable. בקצרה: "שומר סף" (watchdog) שרץ כל
+    // WATCHDOG_INTERVAL_MS ובודק שדגימת עוצמה תקינה *כלשהי* קרתה לאחרונה;
+    // אם לא (וגם אין שיחה פעילה כרגע) - מכריח הפעלה מחדש של ההקלטה, במקום
+    // לחכות לטיימר הרענון הכללי של 4 דקות או לתלות הכל בכך ש-callback של
+    // שגיאה בהכרח יגיע (לא תמיד קורה בפועל בכל מכשיר/יצרן).
+    private static final long WATCHDOG_INTERVAL_MS = 10_000;
+    private static final long WATCHDOG_STALE_THRESHOLD_MS = 15_000;
+
     // כמה זמן לחכות אחרי שזוהתה שיחה נכנסת מצלצלת ("RINGING") לפני שמנסים
     // לענות עליה אוטומטית - חלק מהמכשירים צריכים רגע עד שאפשר לענות בפועל.
     private static final long AUTO_ANSWER_DELAY_MS = 700;
@@ -83,6 +118,22 @@ public class CryDetectionService extends Service {
     private int sensitivityPercent; // 0-100 מהמשתמש, 0=רגיש מאוד, 100=רגיש הכי פחות
     private long lastCallTimeMs = 0;
 
+    // כמה דגימות רצופות היו מעל הסף עד כה (מתאפס בכל דגימה שמתחת לסף) -
+    // ראו REQUIRED_CONSECUTIVE_SAMPLES.
+    private int consecutiveOverThreshold = 0;
+
+    // "שומר סף" (watchdog): מתי בפעם האחרונה התקבלה דגימת עוצמה תקינה
+    // (בהצלחה, בלי חריגה) - ראו הסבר מלא ב-WATCHDOG_* והערה מעל
+    // watchdogRunnable.
+    private long lastSuccessfulSampleMs = 0;
+    private Runnable watchdogRunnable;
+
+    // האם יש כרגע שיחה פעילה (מצלצלת/מחוברת) מכל סוג - יוצאת שלנו, נכנסת,
+    // או אפילו שיחה שלא קשורה לאפליקציה בכלל (למשל מישהו אחר במכשיר
+    // התקשר). כל עוד זה true - לא מפעילים מחדש הקלטה, וה-watchdog לא נוגע
+    // בכלום (השיחה עצמה תופסת את המיקרופון, וזה תקין וצפוי).
+    private boolean callCurrentlyActive = false;
+
     // הגדרות שיחה/שמע
     private boolean autoAnswerEnabled;
     private List<String> autoAnswerNumbers;
@@ -98,6 +149,7 @@ public class CryDetectionService extends Service {
     private boolean weInitiatedOutgoingCall = false;
     private boolean triedSecondaryThisCycle = false;
     private long outgoingCallOffHookStartMs = 0;
+    private long callInitiatedAtMs = 0;
 
     // מצב מעקב כללי כדי לדעת אם השיחה הנוכחית (יוצאת או נכנסת שנענתה) שלנו
     // צריכה טיפול שמע (רמקול/השתקה), ולשחזר בסיום
@@ -140,6 +192,7 @@ public class CryDetectionService extends Service {
         registerPhoneStateListener();
         startRecordingAndMonitoring();
         scheduleRecorderRestart();
+        scheduleWatchdog();
 
         // אם השירות נהרג ע"י המערכת - שיתחיל מחדש עם אותם נתונים (ה-Intent האחרון)
         return START_REDELIVER_INTENT;
@@ -211,33 +264,76 @@ public class CryDetectionService extends Service {
     private void handleCallStateChanged(int state, String incomingNumber) {
         switch (state) {
             case TelephonyManager.CALL_STATE_RINGING:
+                callCurrentlyActive = true;
                 lastIncomingNumber = incomingNumber;
+                // ברגע שיש שיחה מצלצלת, המיקרופון עומד להיתפס בכל מקרה (גם
+                // אם נענה אוטומטית) - עוצרים את ההקלטה שלנו באופן יזום כאן,
+                // במקום להשאיר אותה רצה ולסמוך על כך שהיא "תיכשל בעדינות"
+                // כשהשיחה תיקח את המיקרופון בפועל. זה בדיוק הפער שגרם לבאג
+                // בסעיף ה': לפעמים ה-recorder לא זורק שגיאה כשהמיקרופון
+                // נתפס, הוא פשוט ממשיך "לרוץ" ומחזיר עוצמה שקטה/לא תקינה
+                // בלי אף callback - ואז כלום לא מפעיל התאוששות עד לטיימר
+                // הבא. עצירה יזומה כאן מונעת מהמצב הזה להיווצר מלכתחילה.
+                pauseRecordingForCall();
                 maybeAutoAnswer(incomingNumber);
                 break;
 
             case TelephonyManager.CALL_STATE_OFFHOOK:
+                callCurrentlyActive = true;
                 if (weInitiatedOutgoingCall && outgoingCallOffHookStartMs == 0) {
                     outgoingCallOffHookStartMs = SystemClock.elapsedRealtime();
                 }
+                pauseRecordingForCall();
                 applyInCallAudioSettings();
                 break;
 
             case TelephonyManager.CALL_STATE_IDLE:
+                callCurrentlyActive = false;
                 handleCallEnded();
                 break;
         }
     }
 
+    /**
+     * עוצר את לולאת הדגימה וה-recorder הנוכחיים בלי לגעת בדגלי מעקב השיחה
+     * (weInitiatedOutgoingCall וכו') - להבדיל מ-startRecordingAndMonitoring
+     * שגם מפעיל recorder חדש מיד. כאן רק "משתיקים" את ההאזנה בזמן שהמיקרופון
+     * ממילא הולך להיתפס ע"י השיחה עצמה, כדי לא להשאיר recorder שרץ על עיוור
+     * ועלול להיתקע בשקט. ההאזנה תחודש כרגיל מ-handleCallEnded() כשהשיחה
+     * תסתיים (state IDLE).
+     */
+    private void pauseRecordingForCall() {
+        if (sampleRunnable != null) {
+            handler.removeCallbacks(sampleRunnable);
+        }
+        stopRecorderQuietly();
+    }
+
     private void handleCallEnded() {
-        // "אין מענה" -> נסה מספר שני, רק עבור שיחה שהאפליקציה עצמה יזמה
+        // "אין מענה" (או דחייה שהועברה לתא קולי) -> נסה מספר שני, רק עבור
+        // שיחה שהאפליקציה עצמה יזמה. שני איתותים משולבים כאן (ראו הסבר
+        // מפורט ב-FAST_CONNECT_SUSPICIOUS_MS למעלה):
+        //  1) משך ה-OFFHOOK קצר מדי (כמו קודם) - כנראה לא נענתה בפועל.
+        //  2) המעבר ל-OFFHOOK קרה *מהר מדי* אחרי שיזמנו את השיחה - חשוד
+        //     כדחייה מיידית שמנותבת ישר לתא קולי, גם אם אחר כך תא קולי
+        //     "מדבר" הרבה זמן ומאריך את משך ה-OFFHOOK.
+        // זו עדיין הערכה בלבד - אין ב-Android API רשמי שמבטיח זיהוי ודאי
+        // של תא קולי לאפליקציה שהיא לא החייגן ברירת המחדל.
         if (weInitiatedOutgoingCall) {
             long durationMs = outgoingCallOffHookStartMs == 0
                     ? 0
                     : SystemClock.elapsedRealtime() - outgoingCallOffHookStartMs;
-            boolean likelyUnanswered = outgoingCallOffHookStartMs == 0 || durationMs < ANSWER_TIMEOUT_MS;
+            long timeToOffHookMs = outgoingCallOffHookStartMs == 0
+                    ? -1
+                    : outgoingCallOffHookStartMs - callInitiatedAtMs;
+
+            boolean shortDuration = outgoingCallOffHookStartMs == 0 || durationMs < ANSWER_TIMEOUT_MS;
+            boolean fastConnectSuspicious = timeToOffHookMs >= 0 && timeToOffHookMs < FAST_CONNECT_SUSPICIOUS_MS;
+            boolean likelyUnanswered = shortDuration || fastConnectSuspicious;
 
             weInitiatedOutgoingCall = false;
             outgoingCallOffHookStartMs = 0;
+            callInitiatedAtMs = 0;
 
             if (likelyUnanswered && !triedSecondaryThisCycle && !isEmpty(secondaryPhoneNumber)) {
                 triedSecondaryThisCycle = true;
@@ -391,8 +487,56 @@ public class CryDetectionService extends Service {
         handler.postDelayed(restartRunnable, RECORDER_RESTART_INTERVAL_MS);
     }
 
+    /**
+     * "שומר סף" (watchdog) - התיקון המרכזי לבאג בסעיף ה' ("מפסיק להתקשר אחרי
+     * חיוג ראשון, עד כיבוי/הפעלה מחדש - ולפעמים מתאושש מעצמו אחרי כמה
+     * דקות").
+     *
+     * למה זה קרה: ל-checkAmplitude() יש רק שתי דרכים לגלות שההאזנה "מתה" -
+     * חריגה (Exception) בקריאה ל-getMaxAmplitude(), או callback שגיאה
+     * מה-MediaRecorder עצמו (setOnErrorListener). הבעיה: בחלק מהמכשירים/
+     * תרחישים (בעיקר כשהמיקרופון נתפס ע"י שיחה טלפונית פעילה) אף אחד
+     * מהשניים לא בהכרח קורה - ה-recorder פשוט ממשיך "לרוץ" בלי לזרוק שגיאה,
+     * אבל גם לא מייצר יותר דגימות עוצמה תקינות שמשקפות את מה שקורה בחדר.
+     * במצב הזה שום דבר לא מפעיל את מנגנון ההתאוששות הקיים
+     * (scheduleRecorderRecovery), וההאזנה נשארת "תקועה בשקט" עד שמשהו חיצוני
+     * מפעיל startRecordingAndMonitoring() מסיבה אחרת - וזה בדיוק למה זה
+     * "נראה אקראי" ולפעמים מתקן את עצמו רק אחרי כמה דקות: זה קורה בדיוק
+     * כשטיימר הרענון התקופתי (RECORDER_RESTART_INTERVAL_MS, כל 4 דקות)
+     * מזדמן להפעיל מחדש את ההקלטה.
+     *
+     * הפתרון: לא לסמוך רק על שגיאות/callbacks. כל עוד ההאזנה אמורה להיות
+     * פעילה, ה-watchdog בודק כל WATCHDOG_INTERVAL_MS האם הייתה דגימה תקינה
+     * (lastSuccessfulSampleMs) ב-WATCHDOG_STALE_THRESHOLD_MS האחרונות. אם
+     * לא - ואין כרגע שיחה פעילה שמסבירה את זה (callCurrentlyActive) - כופים
+     * הפעלה מחדש מיידית, במקום לחכות לטיימר של 4 דקות. זה מקצר את זמן
+     * ההתאוששות המקסימלי מ"כמה דקות, לא עקבי" ל-~15-25 שניות קבועות בכל
+     * מקרה, בלי תלות בכך שאיזשהו callback ספציפי יגיע בפועל.
+     */
+    private void scheduleWatchdog() {
+        if (watchdogRunnable != null) {
+            handler.removeCallbacks(watchdogRunnable);
+        }
+        watchdogRunnable = new Runnable() {
+            @Override
+            public void run() {
+                boolean stale = System.currentTimeMillis() - lastSuccessfulSampleMs > WATCHDOG_STALE_THRESHOLD_MS;
+                if (stale && !callCurrentlyActive) {
+                    startRecordingAndMonitoring();
+                }
+                handler.postDelayed(this, WATCHDOG_INTERVAL_MS);
+            }
+        };
+        handler.postDelayed(watchdogRunnable, WATCHDOG_INTERVAL_MS);
+    }
+
     private void startRecordingAndMonitoring() {
         restartScheduled = false;
+        consecutiveOverThreshold = 0;
+        // מאפסים את שעון ה-watchdog לרגע הזה (לא ל-0) כדי שלא "יחשוב" מיד
+        // שההאזנה תקועה עוד לפני שניתנה לה הזדמנות לדגום בהצלחה בפעם
+        // הראשונה אחרי ההפעלה מחדש.
+        lastSuccessfulSampleMs = System.currentTimeMillis();
 
         // מנקים לולאות דגימה קודמות כדי לא ליצור כפילויות בכל הפעלה מחדש
         if (sampleRunnable != null) {
@@ -461,11 +605,29 @@ public class CryDetectionService extends Service {
             return;
         }
 
+        // דגימה תקינה התקבלה בהצלחה (גם אם העוצמה עצמה נמוכה) - מעדכנים את
+        // "שומר הסף" (watchdog) שרואה בכך הוכחה שההאזנה עדיין חיה ועובדת
+        // בפועל. זה מה שמאפשר לו לזהות את המקרה ההפוך: recorder שרץ אבל לא
+        // מייצר יותר דגימות תקינות בלי לזרוק אף שגיאה (ראו הערה מעל
+        // watchdogRunnable) - סעיף ה'.
+        lastSuccessfulSampleMs = System.currentTimeMillis();
+
         // הסף בפועל: ככל שהרגישות (sensitivityPercent) נמוכה יותר, כך הסף נמוך יותר
         // כלומר יותר רגיש לרעשים חלשים. טווח סביר לרעש חדר: 0-15000.
         int threshold = 1500 + (sensitivityPercent * 130); // ~1500 עד ~14500
 
         if (amplitude > threshold) {
+            consecutiveOverThreshold++;
+        } else {
+            consecutiveOverThreshold = 0;
+        }
+
+        // דורשים כמה דגימות רצופות מעל הסף (רעש מתמשך, לא רעש חד-פעמי) לפני
+        // שמחייגים בפועל - ראו REQUIRED_CONSECUTIVE_SAMPLES. משפר את הדיוק
+        // מול רעשי רקע קצרים (טריקת דלת, שיעול וכו') בלי לפגוע משמעותית
+        // בזמן התגובה לבכי אמיתי.
+        if (consecutiveOverThreshold >= REQUIRED_CONSECUTIVE_SAMPLES) {
+            consecutiveOverThreshold = 0;
             tryPlaceCall();
         }
     }
@@ -486,6 +648,7 @@ public class CryDetectionService extends Service {
     private void placeCallTo(String numberToCall) {
         weInitiatedOutgoingCall = true;
         outgoingCallOffHookStartMs = 0;
+        callInitiatedAtMs = SystemClock.elapsedRealtime();
 
         Intent callIntent = new Intent(Intent.ACTION_CALL);
         callIntent.setData(Uri.parse("tel:" + numberToCall));
@@ -576,6 +739,7 @@ public class CryDetectionService extends Service {
         super.onDestroy();
         if (sampleRunnable != null) handler.removeCallbacks(sampleRunnable);
         if (restartRunnable != null) handler.removeCallbacks(restartRunnable);
+        if (watchdogRunnable != null) handler.removeCallbacks(watchdogRunnable);
         stopRecorderQuietly();
         releaseWakeLock();
         unregisterPhoneStateListener();

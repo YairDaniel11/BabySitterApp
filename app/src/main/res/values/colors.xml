@@ -10,4 +10,12 @@
     <color name="text_light_gray">#FFCCCCCC</color>
     <color name="divider_gray">#FF444444</color>
     <color name="row_gray">#FF3A3E44</color>
+
+    <!-- הצ'קבוקסים במסך לא מוגדרים עם צבע מותאם אישית - הם משתמשים ב-tint
+         ברירת המחדל של הפלטפורמה (הוי הירוק הסטנדרטי של אנדרואיד ל-CheckBox/
+         RadioButton מסומן). הפניה לאותו צבע פלטפורמה בדיוק, כדי שמסגרת
+         הפוקוס תתאים בול לצבע ה-V הירוק שרואים בסימון תיבות הסימון. אם בפועל
+         במכשיר היעד (שיאומי מקשים) ה-tint נראה מעט שונה בגלל עיצוב יצרן
+         משלו - פשוט שנו כאן לצבע ה-HEX המדויק שנצפה שם. -->
+    <color name="focus_green">@android:color/holo_green_light</color>
 </resources>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- רקע לכפתורי "אנשי קשר" (phoneContactButton / secondaryContactButton /
+     autoAnswerContactButton): מילוי טורקיז קבוע כרגיל, ובנוסף מסגרת דקה
+     בירוק (אותו ירוק בדיוק כמו ה-V בצ'קבוקסים - ראו colors.xml/focus_green)
+     כשהכפתור בפוקוס. זה נותן חיווי ברור איפה המשתמש נמצא כרגע בעת ניווט
+     עם מקשים פיזיים/D-pad במכשיר ללא מסך מגע - בלי זה, כפתור בפוקוס נראה
+     זהה לכפתור לא בפוקוס כי הרקע הוא צבע שטוח קבוע. state_pressed מתווסף
+     גם כן (לא רק state_focused) כדי שגם מגע ישיר על מסך (במכשירים שכן יש
+     להם מגע) יראה את אותו חיווי לרגע. הסדר בסלקטור קובע עדיפות - focused/
+     pressed חייבים להופיע לפני ברירת המחדל. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/accent_teal" />
+            <stroke
+                android:width="2dp"
+                android:color="@color/focus_green" />
+        </shape>
+    </item>
+
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/accent_teal" />
+            <stroke
+                android:width="2dp"
+                android:color="@color/focus_green" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/accent_teal" />
+        </shape>
+    </item>
+
+</selector>
