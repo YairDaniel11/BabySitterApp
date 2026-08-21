@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- רקע עגול לכפתור המרכזי הגדול (סעיף א') במצב "כבוי" (לא מאזין) - טורקיז,
+     אותו סגנון מסגרת-פוקוס ירוקה כמו bg_contact_button.xml, כדי לשמור על
+     חיווי ניווט עקבי עם מקשים/D-pad. הכפתור עצמו מתחלף בין
+     bg_toggle_idle (זה) ל-bg_toggle_active (אדום, סעיף המצב הפעיל) בקוד
+     (MainActivity.updateUiState), כך שהצבע עצמו - לא רק הטקסט - מסמן
+     בבירור אם ההאזנה פעילה, גם למי שלא קורא עברית/לא שם לב לטקסט. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/accent_teal" />
+            <stroke
+                android:width="3dp"
+                android:color="@color/focus_green" />
+        </shape>
+    </item>
+
+    <item android:state_pressed="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/accent_teal" />
+            <stroke
+                android:width="3dp"
+                android:color="@color/focus_green" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/accent_teal" />
+        </shape>
+    </item>
+
+</selector>

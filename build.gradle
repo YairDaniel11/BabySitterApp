@@ -4,7 +4,11 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.4.2'
+        // הועלה מ-7.4.2: AGP 7.4.x לא תומך בקומפילציה מול API 34
+        // (compileSdk 34, נדרש כדי להעלות את targetSdk - ראו app/build.gradle).
+        // 8.5.2 היא גרסה יציבה שתומכת רשמית עד API 34, ומצריכה בהתאם
+        // Gradle 8.7+ (עודכן גם ב-.github/workflows/build.yml וב-.gitlab-ci.yml).
+        classpath 'com.android.tools.build:gradle:8.5.2'
     }
 }
 

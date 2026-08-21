@@ -30,12 +30,15 @@ jobs:
     # אותה תמונת Docker הרשמית של Gradle שמשמשת ב-.gitlab-ci.yml - כך שאין
     # תלות בגרסת Gradle/JDK שמותקנת (או לא מותקנת) מראש על ה-runner של
     # GitHub, ותוצאת הבנייה זהה בין שני השירותים.
+    # הועלה מ-7.6.4 ל-8.7: AGP עודכן ל-8.5.2 (כדי לתמוך ב-compileSdk 34,
+    # ראו app/build.gradle) ודורש בהתאם Gradle 8.0+.
     container:
-      image: gradle:7.6.4-jdk17
+      image: gradle:8.7-jdk17
 
     env:
-      ANDROID_COMPILE_SDK: "33"
-      ANDROID_BUILD_TOOLS: "33.0.2"
+      # הועלה מ-33 ל-34 בהתאם ל-compileSdk/targetSdk החדשים באפליקציה.
+      ANDROID_COMPILE_SDK: "34"
+      ANDROID_BUILD_TOOLS: "34.0.0"
       # אם ה-URL הזה יחדל לעבוד בעתיד (גוגל מדי פעם מעדכנים את מספר הגרסה
       # בשם הקובץ), פשוט קחו קישור עדכני מתוך
       # https://developer.android.com/studio#command-line-tools-only ועדכנו כאן.
@@ -55,7 +58,7 @@ jobs:
           path: |
             ${{ env.ANDROID_SDK_ROOT }}
             ${{ env.GRADLE_USER_HOME }}
-          key: android-sdk-and-gradle-cache-${{ runner.os }}
+          key: android-sdk-and-gradle-cache-${{ runner.os }}-v34
 
       - name: Install Android SDK
         run: |
@@ -71,8 +74,22 @@ jobs:
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-${ANDROID_COMPILE_SDK}" "build-tools;${ANDROID_BUILD_TOOLS}" > /dev/null
 
-      # minSdk/targetSdk = 19 (אנדרואיד 4.4 KitKat) מוגדרים בקוד עצמו
-      # (app/build.gradle) ולא כאן - ה-CI רק מקמפל, לא משנה את גרסת היעד.
+      # *** עדכון גרסה אוטומטי (סעיף ח' בבקשת השיפור) ***
+      # בעבר versionCode היה קבוע (1) בקוד, ולא התעדכן בין ריצות. השלב הזה
+      # מחליף אותו, לפני הבנייה, במספר ההרצה הרץ ועולה של GitHub Actions
+      # (github.run_number - מתחיל מ-1 ועולה ב-1 בכל הרצה של הפייפליין הזה
+      # במאגר, לא מתאפס לעולם) - כך שכל APK שנבנה מקבל אוטומטית מספר גרסה
+      # חדש וגבוה יותר מהקודם, בלי שצריך לזכור לערוך את app/build.gradle
+      # ידנית בכל שינוי. versionName מתעדכן באותו אופן לנוחות קריאה
+      # (למשל "1.7" עבור הרצה מספר 7).
+      - name: Bump version (versionCode/versionName)
+        run: |
+          sed -i "s/versionCode [0-9]\+/versionCode ${{ github.run_number }}/" app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"1.${{ github.run_number }}\"/" app/build.gradle
+          grep -E "versionCode|versionName" app/build.gradle
+
+      # minSdk 19 (אנדרואיד 4.4 KitKat) מוגדר בקוד עצמו (app/build.gradle)
+      # ולא כאן - ה-CI רק מקמפל, לא משנה את גרסת היעד.
       - name: Build debug APK
         run: |
           export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools"
@@ -100,5 +117,6 @@ jobs:
           name: "בייביסיטר טלפוני - build #${{ github.run_number }}"
           body: |
             APK דיבאג שנבנה אוטומטית מקומיט ${{ github.sha }}.
+            גרסה: versionCode ${{ github.run_number }}.
             לא APK חתום ל-release רשמי (release חתום דורש keystore נפרד).
           files: app/build/outputs/apk/debug/app-debug.apk

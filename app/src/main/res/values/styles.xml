@@ -1,9 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- android:Theme (theme פלטפורמה גולמי, לא AppCompat/Material) - בדיוק מה ששתי
-         האפליקציות האמיתיות שנבדקו על מכשיר שיאומי מקשים משתמשות בו. זה גם התאור
-         הכהה הקלאסי (רקע שחור, טקסט לבן) שמתאים למוסכמת העיצוב שנמצאה שם. -->
+         האפליקציות האמיתיות שנבדקו על מכשיר שיאומי מקשים משתמשות בו.
+         AppTheme הבסיסי נשאר בלי צבעים קונקרטיים - הוא רק מגדיר windowNoTitle.
+         הצבעים בפועל מוגדרים בשתי ה-styles שיורשות ממנו למטה
+         (AppTheme.Dark / AppTheme.Light). android:theme ב-manifest ממשיך
+         להצביע על AppTheme "הפשוט" הזה (כדי שלא יהיה הבזק לפני שהקוד
+         מחליט/מיישם את ה-theme הנכון ב-onCreate) - ראו ThemeUtil.applyTheme
+         שקוראים לו ב-onCreate של MainActivity/SettingsActivity, לפני
+         setContentView, והוא מחליף בפועל לאחת משתי ה-styles האלה. -->
     <style name="AppTheme" parent="android:Theme">
         <item name="android:windowNoTitle">true</item>
+        <item name="colorBgMain">@color/bg_dark</item>
+        <item name="colorHeaderBg">@color/header_black</item>
+        <item name="colorAccent">@color/accent_teal</item>
+        <item name="colorTextPrimary">@color/text_white</item>
+        <item name="colorTextSecondary">@color/text_light_gray</item>
+        <item name="colorRowBg">@color/row_gray</item>
+        <item name="colorDivider">@color/divider_gray</item>
+        <item name="colorButtonText">@color/text_white</item>
+    </style>
+
+    <!-- ערכת נושא כהה - זו בעצם ההגדרה המקורית (הצבעים שהיו קבועים ב-layout
+         בעבר), עכשיו כערכי ברירת מחדל מפורשים כדי שההבדל מול הבהירה יהיה
+         ברור. זו גם ברירת המחדל כש"מערכת" (System) נבחר במכשיר ישן
+         (לפני אנדרואיד 10) שאין בו בכלל מושג של Dark Mode ברמת המערכת. -->
+    <style name="AppTheme.Dark" parent="AppTheme">
+        <item name="colorBgMain">@color/bg_dark</item>
+        <item name="colorHeaderBg">@color/header_black</item>
+        <item name="colorAccent">@color/accent_teal</item>
+        <item name="colorTextPrimary">@color/text_white</item>
+        <item name="colorTextSecondary">@color/text_light_gray</item>
+        <item name="colorRowBg">@color/row_gray</item>
+        <item name="colorDivider">@color/divider_gray</item>
+        <item name="colorButtonText">@color/text_white</item>
+    </style>
+
+    <!-- ערכת נושא בהירה - אותו מבנה בדיוק, עם רקעים בהירים/טקסט כהה. אקסנט
+         (colorAccent) נשאר טורקיז זהה בשתי הערכות בכוונה - זה צבע המיתוג,
+         וגם למה כפתורי "אנשי קשר"/כפתור התחל-עצור (bg_contact_button.xml
+         וה-drawable של כפתור הפעלה/עצירה) יכולים להמשיך להפנות ישירות
+         ל-@color/accent_teal בלי תלות ב-theme - נמנעים בכוונה מ-"?attr/..."
+         בתוך drawable (נתמך רק מ-API 21+, והמכשיר היעד הישן הוא API 19). -->
+    <style name="AppTheme.Light" parent="AppTheme">
+        <item name="colorBgMain">@color/bg_light</item>
+        <item name="colorHeaderBg">@color/header_light</item>
+        <item name="colorAccent">@color/accent_teal</item>
+        <item name="colorTextPrimary">@color/text_dark</item>
+        <item name="colorTextSecondary">@color/text_gray_dark</item>
+        <item name="colorRowBg">@color/row_light</item>
+        <item name="colorDivider">@color/divider_light</item>
+        <item name="colorButtonText">@color/text_white</item>
     </style>
 </resources>

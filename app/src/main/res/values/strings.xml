@@ -1,12 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">בייביסיטר טלפוני</string>
+
+    <!-- מסך הבית -->
+    <string name="settings_button">הגדרות</string>
+    <string name="start_listening_short">התחל\nהאזנה</string>
+    <string name="stop_listening_short">עצור\nהאזנה</string>
+    <string name="status_idle">מצב: כבוי</string>
+    <string name="status_listening">מצב: מאזין לרעש/בכי...</string>
+
+    <!-- מסך הגדרות -->
+    <string name="settings_title">הגדרות</string>
     <string name="phone_label">מספר טלפון להתקשרות (הורה ראשי)</string>
     <string name="phone_secondary_label">מספר טלפון נוסף (יחויג אם הראשון לא עונה - אופציונלי)</string>
     <string name="pick_contact">אנשי קשר</string>
     <string name="contact_pick_error">לא הצלחתי לקרוא את המספר מאיש הקשר שנבחר</string>
+    <string name="save_settings">שמור הגדרות</string>
+    <string name="settings_saved">ההגדרות נשמרו</string>
 
     <string name="auto_answer_section_title">מענה אוטומטי לשיחות נכנסות</string>
+    <string name="auto_answer_independent_note">מענה אוטומטי פועל בנפרד לגמרי מהאזנה לבכי - אפשר להפעיל אותו גם כשההאזנה כבויה. הוא עונה רק לשיחות נכנסות, ולעולם לא נוגע בשיחות יוצאות.</string>
     <string name="auto_answer_enabled">אפשר מענה אוטומטי משיחות ממספרים מוגדרים</string>
     <string name="auto_answer_numbers_label">מספרים למענה אוטומטי, מופרדים בפסיק (ריק = להשתמש במספרים שהוגדרו למעלה)</string>
     <string name="auto_answer_speaker">מענה אוטומטי ברמקול (כדי לשמוע טוב יותר את החדר)</string>
@@ -20,10 +33,21 @@
     <string name="sensitivity_high">רגיש מאוד (כל רעש קטן)</string>
     <string name="sensitivity_medium">רגיל</string>
     <string name="sensitivity_low">פחות רגיש (רק רעש חזק)</string>
-    <string name="start_listening">התחל האזנה (מצב חדר הילדים)</string>
-    <string name="stop_listening">עצור האזנה</string>
-    <string name="status_idle">מצב: כבוי</string>
-    <string name="status_listening">מצב: מאזין לרעש/בכי...</string>
+
+    <!-- ערכת נושא (סעיף ד') -->
+    <string name="theme_label">ערכת נושא</string>
+    <string name="theme_system">לפי המערכת (ברירת מחדל)</string>
+    <string name="theme_light">בהיר</string>
+    <string name="theme_dark">כהה</string>
+
     <string name="notification_title">בייביסיטר פעיל</string>
     <string name="notification_text">מאזין לחדר הילדים</string>
+
+    <!-- הרשאות (סעיף ה') -->
+    <string name="permission_missing_title">חסרות הרשאות</string>
+    <string name="permission_missing_message">כדי שההאזנה תוכל להתקשר אוטומטית להורה, האפליקציה צריכה הרשאות שיחה, מיקרופון ומצב שיחה. אשרו אותן בחלון שנפתח (או דרך הגדרות המכשיר), ואז נסו שוב.</string>
+    <string name="permission_denied_notification_title">בייביסיטר: חסרה הרשאה</string>
+    <string name="permission_denied_notification_text">לא ניתן להתקשר אוטומטית - חסרה הרשאת שיחה. פתחו את האפליקציה ואשרו הרשאות.</string>
+    <string name="permission_auto_answer_missing">כדי להפעיל מענה אוטומטי צריך לאשר הרשאות שיחה קודם - נפתח כעת חלון אישור.</string>
+    <string name="open_app_settings">פתח הגדרות אפליקציה</string>
 </resources>

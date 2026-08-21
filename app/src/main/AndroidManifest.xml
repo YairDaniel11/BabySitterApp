@@ -15,8 +15,8 @@
 
     <!-- דרוש כדי לעקוב אחרי מצב השיחה (מחייג/מצלצל/מחובר/הסתיים) - זה מה
          שמאפשר: לזהות "אין מענה" ולחייג למספר השני, לזהות שיחה נכנסת
-         כדי לענות עליה אוטומטית, ולהחזיר את ההאזנה מיד כשהשיחה מסתיימת
-         (במקום לחכות עד להפעלה מחדש ידנית - זה מה שתיקן את הבאג). -->
+         כדי לענות עליה אוטומטית (כולל דרך AutoAnswerReceiver העצמאי -
+         ראו שם), ולהחזיר את ההאזנה מיד כשהשיחה מסתיימת. -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <!-- מגרסת אנדרואיד 10 ואילך, מספר השיחה הנכנסת (הדרוש כדי להשוות מול
@@ -24,15 +24,27 @@
          ל-READ_PHONE_STATE. -->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
 
-    <!-- מאפשרת לענות אוטומטית לשיחה נכנסת דרך ה-API הרשמי (TelephonyManager
+    <!-- מאפשרת לענות אוטומטית לשיחה נכנסת דרך ה-API הרשמי (TelecomManager
          .acceptRingingCall) בגרסאות אנדרואיד 8+. במכשיר היעד (אנדרואיד ישן
          עם מקשים) זה כנראה לא קיים, ואז נופלים חזרה לשיטה הישנה - ראו הערה
-         ב-CryDetectionService. -->
+         ב-AutoAnswerReceiver. -->
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
 
     <!-- דרוש כדי להעביר שיחות לרמקול ולשלוט בעוצמת קול השיחה (הרשאה רגילה,
          ניתנת אוטומטית בהתקנה - לא דורשת דיאלוג). -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- FOREGROUND_SERVICE_MICROPHONE: מאנדרואיד 14 (API 34) ואילך, שירות
+         חזית שמשתמש במיקרופון (android:foregroundServiceType="microphone"
+         על CryDetectionService למטה) חייב גם את הרשאת התוספת הספציפית הזו,
+         בנוסף ל-FOREGROUND_SERVICE הכללית שכבר קיימת למעלה. בלעדיה, הפעלת
+         שירות ההאזנה על מכשיר אנדרואיד 14+ הייתה נכשלת עם SecurityException. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
+    <!-- מאנדרואיד 13 (API 33) ואילך, הצגת התראה (כולל התראת "שירות פעיל"
+         הרגילה של האפליקציה, וגם התראת האזהרה אם חסרה הרשאת שיחה - ראו
+         CryDetectionService) דורשת הרשאה מפורשת בזמן ריצה, לא רק ב-manifest. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
@@ -51,10 +63,40 @@
             </intent-filter>
         </activity>
 
+        <!-- מסך ההגדרות החדש (סעיף א') - כל שדות הקלט (מספרי טלפון, מענה
+             אוטומטי, רגישות, ערכת נושא) עברו לכאן; מסך הבית (MainActivity)
+             נשאר עם כפתור התחלה/עצירה מרכזי בלבד + כפתור "הגדרות" תחתון
+             שפותח את המסך הזה. -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
         <service
             android:name=".CryDetectionService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- *** מענה אוטומטי עצמאי מהאזנה לבכי (סעיף ב') ***
+             receiver רשום ב-manifest (לא דינמי בתוך שירות) שמאזין לשידור
+             המערכת android.intent.action.PHONE_STATE. שידור המערכת הזה
+             "מוגן" (protected broadcast) ולכן מגיע ל-receiver סטטי גם אם
+             האפליקציה לא רצה כרגע ברקע וגם אם CryDetectionService (האזנה
+             לבכי) כלל לא הופעל - בדיוק מה שמאפשר להפריד לגמרי בין "האזנה
+             לבכי" לבין "מענה אוטומטי", ולהפעיל את השני בלי הראשון.
+             ה-receiver מגיב אך ורק למצב RINGING (שיחה נכנסת מצלצלת) - מצב
+             שקיים רק בשיחות *נכנסות*, לעולם לא בשיחות יוצאות - כך שמענה
+             אוטומטי לעולם לא "יתערב" בשיחה יוצאת שהאפליקציה עצמה יזמה. -->
+        <receiver
+            android:name=".AutoAnswerReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.READ_PHONE_STATE">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

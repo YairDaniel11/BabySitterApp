@@ -10,11 +10,15 @@
 # (side-load) - בדיוק כמו שמתואר ב-README. זה *לא* APK חתום ל-release
 # (release חתום דורש keystore נפרד - אם תרצו את זה בעתיד, תגידו ואוסיף שלב).
 
-image: gradle:7.6.4-jdk17
+# הועלה מ-7.6.4 ל-8.7: AGP עודכן ל-8.5.2 (ב-build.gradle השורשי, כדי לתמוך
+# ב-compileSdk 34 - ראו app/build.gradle) ודורש בהתאם Gradle 8.0+.
+image: gradle:8.7-jdk17
 
 variables:
-  ANDROID_COMPILE_SDK: "33"
-  ANDROID_BUILD_TOOLS: "33.0.2"
+  # הועלה מ-33 ל-34 בהתאם ל-compileSdk/targetSdk החדשים באפליקציה (ראו
+  # app/build.gradle) - חובה שגרסת ה-platform שמותקנת כאן תואמת.
+  ANDROID_COMPILE_SDK: "34"
+  ANDROID_BUILD_TOOLS: "34.0.0"
   # גרסת ה-cmdline-tools להורדה מגוגל. אם ה-URL הזה יחדל לעבוד בעתיד (גוגל
   # מדי פעם מעדכנים את מספר הגרסה בשם הקובץ), פשוט קחו קישור עדכני מתוך
   # https://developer.android.com/studio#command-line-tools-only ועדכנו כאן.
@@ -25,7 +29,7 @@ variables:
 # שומרים בין ריצות כדי שההורדה של Android SDK ותלויות Gradle לא יקרו
 # מאפס בכל push - חוסך המון זמן מריצה שנייה ואילך.
 cache:
-  key: android-sdk-and-gradle-cache
+  key: android-sdk-and-gradle-cache-v34
   paths:
     - android-sdk/
     - .gradle-cache/
@@ -48,12 +52,17 @@ before_script:
   - yes | sdkmanager --licenses > /dev/null 2>&1 || true
   - sdkmanager "platform-tools" "platforms;android-${ANDROID_COMPILE_SDK}" "build-tools;${ANDROID_BUILD_TOOLS}" > /dev/null
 
-# minSdk/targetSdk = 19 (אנדרואיד 4.4 KitKat) מוגדרים בקוד עצמו
-# (app/build.gradle) ולא כאן - ה-CI רק מקמפל, לא משנה את גרסת היעד.
+# minSdk = 19 (אנדרואיד 4.4 KitKat) מוגדר בקוד עצמו (app/build.gradle) ולא
+# כאן - ה-CI רק מקמפל, לא משנה את גרסת היעד.
 assembleDebug:
   stage: build
   script:
     - export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools"
+    # מעדכן את versionCode/versionName בתוך app/build.gradle לפני הבנייה, לפי
+    # מספר ההרצה הרץ ועולה של GitLab (CI_PIPELINE_IID) - כך שכל APK שיוצא
+    # מקבל אוטומטית מספר גרסה חדש, בלי עדכון ידני בקוד בכל פעם (סעיף ח').
+    - sed -i "s/versionCode [0-9]\+/versionCode ${CI_PIPELINE_IID}/" app/build.gradle
+    - sed -i "s/versionName \"[^\"]*\"/versionName \"1.${CI_PIPELINE_IID}\"/" app/build.gradle
     - gradle assembleDebug --stacktrace --console=plain
   artifacts:
     name: "babysitter-debug-apk"

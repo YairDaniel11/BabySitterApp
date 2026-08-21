@@ -7,8 +7,6 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.media.AudioManager;
-import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -16,13 +14,11 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
-import android.telecom.TelecomManager;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
+import android.media.MediaRecorder;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * שירות רקע שרץ במכשיר שנשאר בחדר הילדים.
@@ -36,12 +32,20 @@ import java.util.List;
  *    מסתיימת - זה מה שתיקן את הבאג שבו ניתוק שיחה נכנסת "תקע" את ההאזנה
  *    עד הפעלה מחדש ידנית.
  * 2. לזהות "אין מענה" בשיחה היוצאת שלנו ולחייג למספר השני, אם הוגדר.
- * 3. לזהות שיחה נכנסת ממספר מאושר ולענות עליה אוטומטית.
+ *
+ * *** שינוי ארכיטקטוני (סעיף ב') ***
+ * מענה אוטומטי לשיחות *נכנסות* עבר החוצה מכאן ל-AutoAnswerReceiver -
+ * receiver עצמאי שנרשם ב-manifest ופועל בלי קשר לכך שהשירות הזה (האזנה
+ * לבכי) פעיל או לא. השירות כאן ממשיך לטפל אך ורק בשיחות *יוצאות* שהוא
+ * עצמו יזם (זיהוי "אין מענה" -> ניסיון למספר שני), ובהשתקת/הפעלת הרמקול
+ * לשיחות האלה בלבד. ראו AutoAnswerReceiver.java להסבר המלא על ההפרדה.
  */
 public class CryDetectionService extends Service {
 
     private static final String CHANNEL_ID = "babysitter_channel";
+    private static final String WARNING_CHANNEL_ID = "babysitter_warning_channel";
     private static final int NOTIFICATION_ID = 1;
+    private static final int WARNING_NOTIFICATION_ID = 2;
 
     // כל כמה מילישניות בודקים את עוצמת הקול
     private static final long SAMPLE_INTERVAL_MS = 700;
@@ -81,7 +85,7 @@ public class CryDetectionService extends Service {
     // משפר משמעותית את הזיהוי עבור המקרה הנפוץ של דחייה יזומה.
     private static final long FAST_CONNECT_SUSPICIOUS_MS = 3_000;
 
-    // --- שיפור זיהוי הרעש (סעיף ד') ---
+    // --- שיפור זיהוי הרעש (סעיף ד' המקורי) ---
     // רעש רגעי בודד (טריקת דלת, שיעול, טלוויזיה) יכול לחצות את הסף לרגע
     // אחד ולגרום לחיוג שווא. דורשים כמה דגימות רצופות מעל הסף (כל דגימה כל
     // SAMPLE_INTERVAL_MS) לפני שמחשיבים את זה כבכי אמיתי ומחייגים - זה
@@ -89,7 +93,7 @@ public class CryDetectionService extends Service {
     // מאשר רעש חד-פעמי, בלי לפגוע משמעותית בזמן התגובה.
     private static final int REQUIRED_CONSECUTIVE_SAMPLES = 2;
 
-    // --- תיקון באג "מפסיק להתקשר אחרי חיוג ראשון" (סעיף ה') ---
+    // --- תיקון באג "מפסיק להתקשר אחרי חיוג ראשון" ---
     // רואים תיעוד מלא של הבעיה וההסבר לתיקון בהערה מעל checkAmplitude()
     // ובהערה מעל watchdogRunnable. בקצרה: "שומר סף" (watchdog) שרץ כל
     // WATCHDOG_INTERVAL_MS ובודק שדגימת עוצמה תקינה *כלשהי* קרתה לאחרונה;
@@ -98,10 +102,6 @@ public class CryDetectionService extends Service {
     // שגיאה בהכרח יגיע (לא תמיד קורה בפועל בכל מכשיר/יצרן).
     private static final long WATCHDOG_INTERVAL_MS = 10_000;
     private static final long WATCHDOG_STALE_THRESHOLD_MS = 15_000;
-
-    // כמה זמן לחכות אחרי שזוהתה שיחה נכנסת מצלצלת ("RINGING") לפני שמנסים
-    // לענות עליה אוטומטית - חלק מהמכשירים צריכים רגע עד שאפשר לענות בפועל.
-    private static final long AUTO_ANSWER_DELAY_MS = 700;
 
     // כמה זמן אחרי שהשיחה הסתיימה (חזרה ל-IDLE) לחכות לפני שמפעילים מחדש
     // את ההקלטה - נותן למיקרופון רגע להשתחרר בפועל מהמערכת.
@@ -134,10 +134,8 @@ public class CryDetectionService extends Service {
     // בכלום (השיחה עצמה תופסת את המיקרופון, וזה תקין וצפוי).
     private boolean callCurrentlyActive = false;
 
-    // הגדרות שיחה/שמע
-    private boolean autoAnswerEnabled;
-    private List<String> autoAnswerNumbers;
-    private boolean autoAnswerSpeaker;
+    // הגדרות שמע לשיחות שהשירות הזה עצמו יזם/מטפל בהן (יוצאות בלבד -
+    // מענה אוטומטי לנכנסות עבר ל-AutoAnswerReceiver)
     private boolean allCallsSpeaker;
     private boolean muteIncomingVoice;
     private boolean muteRingerWhileActive;
@@ -151,12 +149,11 @@ public class CryDetectionService extends Service {
     private long outgoingCallOffHookStartMs = 0;
     private long callInitiatedAtMs = 0;
 
-    // מצב מעקב כללי כדי לדעת אם השיחה הנוכחית (יוצאת או נכנסת שנענתה) שלנו
-    // צריכה טיפול שמע (רמקול/השתקה), ולשחזר בסיום
+    // מצב מעקב כללי כדי לדעת אם השיחה הנוכחית (יוצאת שלנו) צריכה טיפול
+    // שמע (רמקול/השתקה), ולשחזר בסיום
     private boolean audioAdjustedForCurrentCall = false;
-    private int savedRingerVolume = -1;
     private int savedVoiceCallVolume = -1;
-    private String lastIncomingNumber = null;
+    private int savedRingerVolume = -1;
 
     private boolean restartScheduled = false;
 
@@ -169,22 +166,14 @@ public class CryDetectionService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        SharedPreferences prefs = getSharedPreferences(MainActivity.PREFS_NAME, MODE_PRIVATE);
-        phoneNumber = prefs.getString(MainActivity.KEY_PHONE, "");
-        secondaryPhoneNumber = prefs.getString(MainActivity.KEY_PHONE_SECONDARY, "");
-        sensitivityPercent = prefs.getInt(MainActivity.KEY_SENSITIVITY, 40);
+        SharedPreferences prefs = getSharedPreferences(AppPrefs.PREFS_NAME, MODE_PRIVATE);
+        phoneNumber = prefs.getString(AppPrefs.KEY_PHONE, "");
+        secondaryPhoneNumber = prefs.getString(AppPrefs.KEY_PHONE_SECONDARY, "");
+        sensitivityPercent = prefs.getInt(AppPrefs.KEY_SENSITIVITY, 40);
 
-        autoAnswerEnabled = prefs.getBoolean(MainActivity.KEY_AUTO_ANSWER_ENABLED, false);
-        autoAnswerNumbers = parseNumberList(prefs.getString(MainActivity.KEY_AUTO_ANSWER_NUMBERS, ""));
-        // אם לא הוגדרה רשימה ייעודית למענה אוטומטי - נשתמש במספרי ההורים שהוגדרו
-        if (autoAnswerNumbers.isEmpty()) {
-            if (!isEmpty(phoneNumber)) autoAnswerNumbers.add(normalizeNumber(phoneNumber));
-            if (!isEmpty(secondaryPhoneNumber)) autoAnswerNumbers.add(normalizeNumber(secondaryPhoneNumber));
-        }
-        autoAnswerSpeaker = prefs.getBoolean(MainActivity.KEY_AUTO_ANSWER_SPEAKER, true);
-        allCallsSpeaker = prefs.getBoolean(MainActivity.KEY_ALL_CALLS_SPEAKER, false);
-        muteIncomingVoice = prefs.getBoolean(MainActivity.KEY_MUTE_INCOMING_VOICE, false);
-        muteRingerWhileActive = prefs.getBoolean(MainActivity.KEY_MUTE_RINGER_WHILE_ACTIVE, false);
+        allCallsSpeaker = prefs.getBoolean(AppPrefs.KEY_ALL_CALLS_SPEAKER, false);
+        muteIncomingVoice = prefs.getBoolean(AppPrefs.KEY_MUTE_INCOMING_VOICE, false);
+        muteRingerWhileActive = prefs.getBoolean(AppPrefs.KEY_MUTE_RINGER_WHILE_ACTIVE, false);
 
         startForeground(NOTIFICATION_ID, buildNotification());
         acquireWakeLock();
@@ -198,39 +187,8 @@ public class CryDetectionService extends Service {
         return START_REDELIVER_INTENT;
     }
 
-    private static boolean isEmpty(String s) {
-        return s == null || s.trim().isEmpty();
-    }
-
-    private List<String> parseNumberList(String raw) {
-        List<String> result = new ArrayList<>();
-        if (raw == null) return result;
-        for (String part : raw.split(",")) {
-            String normalized = normalizeNumber(part);
-            if (!normalized.isEmpty()) result.add(normalized);
-        }
-        return result;
-    }
-
-    /** משאיר רק ספרות, כדי שהשוואת מספרים לא תיכשל בגלל רווחים/מקפים/קידומת מדינה. */
-    private String normalizeNumber(String number) {
-        if (number == null) return "";
-        return number.replaceAll("[^0-9]", "");
-    }
-
-    /** משווה לפי סיומת המספר (9 הספרות האחרונות) כדי להתמודד עם קידומת מדינה (+972 מול 0). */
-    private boolean numberMatches(String incoming, String candidate) {
-        if (incoming == null || candidate == null) return false;
-        String a = normalizeNumber(incoming);
-        String b = candidate; // כבר מנורמל ברשימה
-        if (a.isEmpty() || b.isEmpty()) return false;
-        int len = Math.min(Math.min(a.length(), b.length()), 9);
-        if (len < 7) return a.equals(b); // מספרים קצרים מדי להשוואת סיומת - השוואה מלאה
-        return a.substring(a.length() - len).equals(b.substring(b.length() - len));
-    }
-
     // ---------------------------------------------------------------------
-    // מעקב מצב שיחה (תיקון הבאג + "אין מענה" -> מספר שני + מענה אוטומטי)
+    // מעקב מצב שיחה (תיקון הבאג + "אין מענה" -> מספר שני)
     // ---------------------------------------------------------------------
 
     @SuppressWarnings("deprecation")
@@ -241,7 +199,7 @@ public class CryDetectionService extends Service {
         phoneStateListener = new PhoneStateListener() {
             @Override
             public void onCallStateChanged(int state, String incomingNumber) {
-                handleCallStateChanged(state, incomingNumber);
+                handleCallStateChanged(state);
             }
         };
         try {
@@ -249,8 +207,8 @@ public class CryDetectionService extends Service {
                     PhoneStateListener.LISTEN_CALL_STATE);
         } catch (SecurityException se) {
             // אין הרשאת READ_PHONE_STATE מסיבה כלשהי - נמשיך לפעול בלי המעקב
-            // הזה (תכונות "אין מענה למספר שני" ו"מענה אוטומטי" פשוט לא יפעלו,
-            // אבל גילוי בכי וחיוג ידני עדיין עובדים כרגיל).
+            // הזה (תכונת "אין מענה למספר שני" פשוט לא תפעל, אבל גילוי בכי
+            // וחיוג ידני עדיין עובדים כרגיל).
             telephonyManager = null;
         }
     }
@@ -261,30 +219,25 @@ public class CryDetectionService extends Service {
         }
     }
 
-    private void handleCallStateChanged(int state, String incomingNumber) {
+    private void handleCallStateChanged(int state) {
         switch (state) {
             case TelephonyManager.CALL_STATE_RINGING:
                 callCurrentlyActive = true;
-                lastIncomingNumber = incomingNumber;
                 // ברגע שיש שיחה מצלצלת, המיקרופון עומד להיתפס בכל מקרה (גם
-                // אם נענה אוטומטית) - עוצרים את ההקלטה שלנו באופן יזום כאן,
-                // במקום להשאיר אותה רצה ולסמוך על כך שהיא "תיכשל בעדינות"
-                // כשהשיחה תיקח את המיקרופון בפועל. זה בדיוק הפער שגרם לבאג
-                // בסעיף ה': לפעמים ה-recorder לא זורק שגיאה כשהמיקרופון
-                // נתפס, הוא פשוט ממשיך "לרוץ" ומחזיר עוצמה שקטה/לא תקינה
-                // בלי אף callback - ואז כלום לא מפעיל התאוששות עד לטיימר
-                // הבא. עצירה יזומה כאן מונעת מהמצב הזה להיווצר מלכתחילה.
+                // אם AutoAnswerReceiver יענה עליה אוטומטית) - עוצרים את
+                // ההקלטה שלנו באופן יזום כאן, במקום להשאיר אותה רצה ולסמוך
+                // על כך שהיא "תיכשל בעדינות" כשהשיחה תיקח את המיקרופון
+                // בפועל. עצירה יזומה כאן מונעת מהמצב הזה להיווצר מלכתחילה.
                 pauseRecordingForCall();
-                maybeAutoAnswer(incomingNumber);
                 break;
 
             case TelephonyManager.CALL_STATE_OFFHOOK:
                 callCurrentlyActive = true;
                 if (weInitiatedOutgoingCall && outgoingCallOffHookStartMs == 0) {
                     outgoingCallOffHookStartMs = SystemClock.elapsedRealtime();
+                    applyInCallAudioSettings();
                 }
                 pauseRecordingForCall();
-                applyInCallAudioSettings();
                 break;
 
             case TelephonyManager.CALL_STATE_IDLE:
@@ -335,14 +288,13 @@ public class CryDetectionService extends Service {
             outgoingCallOffHookStartMs = 0;
             callInitiatedAtMs = 0;
 
-            if (likelyUnanswered && !triedSecondaryThisCycle && !isEmpty(secondaryPhoneNumber)) {
+            if (likelyUnanswered && !triedSecondaryThisCycle && !AppPrefs.isEmpty(secondaryPhoneNumber)) {
                 triedSecondaryThisCycle = true;
                 placeCallTo(secondaryPhoneNumber);
             }
         }
 
         restoreInCallAudioSettings();
-        lastIncomingNumber = null;
 
         // תיקון הבאג המרכזי: כל שיחה שמסתיימת (בין אם שלנו, בין אם נכנסת
         // שנענתה/נדחתה) עלולה להשאיר את ה-MediaRecorder במצב לא תקין בלי
@@ -353,73 +305,21 @@ public class CryDetectionService extends Service {
         handler.postDelayed(this::startRecordingAndMonitoring, RESTART_AFTER_CALL_DELAY_MS);
     }
 
-    private void maybeAutoAnswer(String incomingNumber) {
-        if (!autoAnswerEnabled) return;
-        if (autoAnswerNumbers.isEmpty()) return;
-
-        boolean approved = false;
-        for (String candidate : autoAnswerNumbers) {
-            if (numberMatches(incomingNumber, candidate)) {
-                approved = true;
-                break;
-            }
-        }
-        if (!approved) return;
-
-        handler.postDelayed(this::attemptAnswerRingingCall, AUTO_ANSWER_DELAY_MS);
-    }
-
-    private void attemptAnswerRingingCall() {
-        if (telephonyManager == null) return;
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // ה-API הרשמי (דורש הרשאת ANSWER_PHONE_CALLS) - זמין מאנדרואיד 8+.
-                // חשוב: acceptRingingCall() נמצאת על TelecomManager (ניהול שיחות),
-                // לא על TelephonyManager (סטטוס רשת/שיחה) - שתי מחלקות עם שמות
-                // דומים אך שונות. זו הייתה שגיאת קומפילציה (cannot find symbol).
-                TelecomManager telecomManager =
-                        (TelecomManager) getSystemService(Context.TELECOM_SERVICE);
-                if (telecomManager != null) {
-                    telecomManager.acceptRingingCall();
-                }
-            } else {
-                // מכשירי אנדרואיד ישנים יותר (כמו יעד ה-minSdk 19 של האפליקציה
-                // הזו) לא חשופים ל-API הרשמי. השיטה הישנה שהייתה נהוגה אז היא
-                // סימולציה של לחיצה על כפתור "הדסט" (media button) - זה עבד
-                // באמינות חלקית בלבד ותלוי ביצרן/גרסה, אז זו רק ניסיון best
-                // effort ולא הבטחה. אם זה לא עובד במכשיר הספציפי, אין דרך
-                // אמינה יותר בלי להפוך את האפליקציה לחייגן ברירת המחדל.
-                simulateHeadsetHookAnswer();
-            }
-        } catch (SecurityException se) {
-            // אין הרשאת ANSWER_PHONE_CALLS - לא ניתן לענות אוטומטית.
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    private void simulateHeadsetHookAnswer() {
-        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return;
-        long eventTime = SystemClock.uptimeMillis();
-        android.view.KeyEvent downEvent = new android.view.KeyEvent(eventTime, eventTime,
-                android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_HEADSETHOOK, 0);
-        android.view.KeyEvent upEvent = new android.view.KeyEvent(eventTime, eventTime,
-                android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_HEADSETHOOK, 0);
-        am.dispatchMediaKeyEvent(downEvent);
-        am.dispatchMediaKeyEvent(upEvent);
-    }
-
     // ---------------------------------------------------------------------
-    // שמע לשיחות (רמקול / השתקת קול נכנס / השתקת צלצול)
+    // שמע לשיחות (רמקול / השתקת קול נכנס / השתקת צלצול) - לשיחות היוצאות
+    // שהשירות הזה עצמו יזם בלבד (ראו AudioRoutingUtil להסבר על תיקון הרמקול)
     // ---------------------------------------------------------------------
 
     private void applyRingerMuteIfNeeded() {
+        // השתקת הצלצול "כל עוד האזנה פעילה" (ולא רק בזמן שיחה ספציפית)
+        // ממומשת ברמת ה-STREAM_RING בעת הפעלת ההאזנה - זה נשאר כפי שהיה.
         if (!muteRingerWhileActive) return;
-        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        android.media.AudioManager am =
+                (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
         if (am == null) return;
         try {
-            savedRingerVolume = am.getStreamVolume(AudioManager.STREAM_RING);
-            am.setStreamVolume(AudioManager.STREAM_RING, 0, 0);
+            savedRingerVolume = am.getStreamVolume(android.media.AudioManager.STREAM_RING);
+            am.setStreamVolume(android.media.AudioManager.STREAM_RING, 0, 0);
         } catch (SecurityException ignored) {
             // בחלק מהמכשירים/גרסאות שינוי עוצמת קול דורש הרשאת "אין הפרעה" -
             // אם זה נכשל, פשוט לא משתיקים את הצלצול, אבל שאר האפליקציה תמשיך לפעול.
@@ -428,10 +328,11 @@ public class CryDetectionService extends Service {
 
     private void restoreRingerVolume() {
         if (savedRingerVolume < 0) return;
-        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        android.media.AudioManager am =
+                (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
         if (am != null) {
             try {
-                am.setStreamVolume(AudioManager.STREAM_RING, savedRingerVolume, 0);
+                am.setStreamVolume(android.media.AudioManager.STREAM_RING, savedRingerVolume, 0);
             } catch (SecurityException ignored) {
             }
         }
@@ -440,29 +341,36 @@ public class CryDetectionService extends Service {
 
     private void applyInCallAudioSettings() {
         if (audioAdjustedForCurrentCall) return;
-        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return;
-
-        boolean wantSpeaker = allCallsSpeaker || (autoAnswerSpeaker && lastIncomingNumber != null);
-        if (wantSpeaker) {
-            am.setMode(AudioManager.MODE_IN_CALL);
-            am.setSpeakerphoneOn(true);
+        if (allCallsSpeaker) {
+            AudioRoutingUtil.applySpeaker(this);
         }
         if (muteIncomingVoice) {
-            savedVoiceCallVolume = am.getStreamVolume(AudioManager.STREAM_VOICE_CALL);
-            am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, 0, 0);
+            android.media.AudioManager am =
+                    (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) {
+                try {
+                    savedVoiceCallVolume = am.getStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL);
+                    am.setStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL, 0, 0);
+                } catch (SecurityException ignored) {
+                }
+            }
         }
         audioAdjustedForCurrentCall = true;
     }
 
     private void restoreInCallAudioSettings() {
         if (!audioAdjustedForCurrentCall) return;
-        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (am != null) {
-            am.setSpeakerphoneOn(false);
-            am.setMode(AudioManager.MODE_NORMAL);
-            if (savedVoiceCallVolume >= 0) {
-                am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, savedVoiceCallVolume, 0);
+        if (allCallsSpeaker) {
+            AudioRoutingUtil.clearSpeaker(this);
+        }
+        if (savedVoiceCallVolume >= 0) {
+            android.media.AudioManager am =
+                    (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) {
+                try {
+                    am.setStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL, savedVoiceCallVolume, 0);
+                } catch (SecurityException ignored) {
+                }
             }
         }
         savedVoiceCallVolume = -1;
@@ -488,9 +396,8 @@ public class CryDetectionService extends Service {
     }
 
     /**
-     * "שומר סף" (watchdog) - התיקון המרכזי לבאג בסעיף ה' ("מפסיק להתקשר אחרי
-     * חיוג ראשון, עד כיבוי/הפעלה מחדש - ולפעמים מתאושש מעצמו אחרי כמה
-     * דקות").
+     * "שומר סף" (watchdog) - התיקון המרכזי לבאג "מפסיק להתקשר אחרי חיוג
+     * ראשון, עד כיבוי/הפעלה מחדש - ולפעמים מתאושש מעצמו אחרי כמה דקות".
      *
      * למה זה קרה: ל-checkAmplitude() יש רק שתי דרכים לגלות שההאזנה "מתה" -
      * חריגה (Exception) בקריאה ל-getMaxAmplitude(), או callback שגיאה
@@ -607,9 +514,7 @@ public class CryDetectionService extends Service {
 
         // דגימה תקינה התקבלה בהצלחה (גם אם העוצמה עצמה נמוכה) - מעדכנים את
         // "שומר הסף" (watchdog) שרואה בכך הוכחה שההאזנה עדיין חיה ועובדת
-        // בפועל. זה מה שמאפשר לו לזהות את המקרה ההפוך: recorder שרץ אבל לא
-        // מייצר יותר דגימות תקינות בלי לזרוק אף שגיאה (ראו הערה מעל
-        // watchdogRunnable) - סעיף ה'.
+        // בפועל.
         lastSuccessfulSampleMs = System.currentTimeMillis();
 
         // הסף בפועל: ככל שהרגישות (sensitivityPercent) נמוכה יותר, כך הסף נמוך יותר
@@ -637,7 +542,7 @@ public class CryDetectionService extends Service {
         if (now - lastCallTimeMs < CALL_COOLDOWN_MS) {
             return; // בקירור - לא מתקשרים שוב מיד
         }
-        if (isEmpty(phoneNumber)) {
+        if (AppPrefs.isEmpty(phoneNumber)) {
             return;
         }
         lastCallTimeMs = now;
@@ -645,10 +550,40 @@ public class CryDetectionService extends Service {
         placeCallTo(phoneNumber);
     }
 
+    /**
+     * *** תיקון סעיף ה' ***
+     * בעבר: אם הרשאת CALL_PHONE לא הייתה זמינה, האפליקציה נפלה חזרה למסך
+     * חיוג רגיל (ACTION_DIAL) שדורש לחיצה ידנית - לא שימושי כשמדובר בילדים
+     * קטנים שלא יכולים לבצע את הלחיצה הזו בעצמם.
+     *
+     * הפתרון החדש: ההרשאה נבדקת ונדרשת *מראש*, לפני שההאזנה בכלל מתחילה
+     * (ראו MainActivity - "התחל האזנה" חסום עד שכל ההרשאות אושרו ע"י
+     * מבוגר). לכן חוסר הרשאה בנקודה הזו הוא כבר מצב חריג שלא אמור לקרות
+     * בזרימה הרגילה (יכול לקרות רק אם המשתמש שלל את ההרשאה ידנית
+     * מהגדרות המכשיר *אחרי* שההאזנה כבר רצה). אם זה בכל זאת קורה - לא
+     * מציגים מסך חיוג ידני (חסר תועלת לילד), אלא עוצרים את ההאזנה
+     * ומציגים התראה בולטת וקבועה (לא נעלמת מעצמה) שמנחה את המבוגר לפתוח
+     * את האפליקציה מחדש ולאשר הרשאות - כך שהבעיה לא "נעלמת בשקט".
+     */
     private void placeCallTo(String numberToCall) {
         weInitiatedOutgoingCall = true;
         outgoingCallOffHookStartMs = 0;
         callInitiatedAtMs = SystemClock.elapsedRealtime();
+
+        // *** חשוב עבור אנדרואיד 4.4 (API 19, המכשיר עם המקשים) ***
+        // Context.checkSelfPermission() נוסף רק ב-API 23 - קריאה אליה בלי
+        // בדיקת גרסה קודם הייתה גורמת ל-NoSuchMethodError וקריסה מיידית על
+        // המכשיר הישן. במכשיר כזה (מתחת ל-API 23) אין בכלל מודל הרשאות
+        // בזמן ריצה - כל הרשאה שהוצהרה ב-manifest כבר מאושרת מרגע ההתקנה,
+        // ולכן אפשר להניח בבטחה שההרשאה קיימת ולדלג ישר לחיוג.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && checkSelfPermission(android.Manifest.permission.CALL_PHONE)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            weInitiatedOutgoingCall = false;
+            showPermissionWarningNotification();
+            stopListeningDueToPermissionLoss();
+            return;
+        }
 
         Intent callIntent = new Intent(Intent.ACTION_CALL);
         callIntent.setData(Uri.parse("tel:" + numberToCall));
@@ -656,12 +591,57 @@ public class CryDetectionService extends Service {
         try {
             startActivity(callIntent);
         } catch (SecurityException se) {
-            // אין הרשאת שיחה - נופלים חזרה למסך חיוג רגיל (ידרוש לחיצה ידנית)
             weInitiatedOutgoingCall = false;
-            Intent dialIntent = new Intent(Intent.ACTION_DIAL);
-            dialIntent.setData(Uri.parse("tel:" + numberToCall));
-            dialIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(dialIntent);
+            showPermissionWarningNotification();
+            stopListeningDueToPermissionLoss();
+        }
+    }
+
+    private void stopListeningDueToPermissionLoss() {
+        getSharedPreferences(AppPrefs.PREFS_NAME, MODE_PRIVATE)
+                .edit().putBoolean(AppPrefs.KEY_RUNNING, false).apply();
+        stopSelf();
+    }
+
+    private void showPermissionWarningNotification() {
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    WARNING_CHANNEL_ID, getString(R.string.permission_denied_notification_title),
+                    NotificationManager.IMPORTANCE_HIGH);
+            manager.createNotificationChannel(channel);
+        }
+        Notification notification = buildWarningNotification();
+        manager.notify(WARNING_NOTIFICATION_ID, notification);
+    }
+
+    @SuppressWarnings("deprecation")
+    private Notification buildWarningNotification() {
+        Intent openApp = new Intent(this, MainActivity.class);
+        openApp.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                ? android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE
+                : android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+        android.app.PendingIntent pendingIntent =
+                android.app.PendingIntent.getActivity(this, 0, openApp, flags);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return new Notification.Builder(this, WARNING_CHANNEL_ID)
+                    .setContentTitle(getString(R.string.permission_denied_notification_title))
+                    .setContentText(getString(R.string.permission_denied_notification_text))
+                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true)
+                    .build();
+        } else {
+            return new Notification.Builder(this)
+                    .setContentTitle(getString(R.string.permission_denied_notification_title))
+                    .setContentText(getString(R.string.permission_denied_notification_text))
+                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true)
+                    .build();
         }
     }
 
@@ -745,7 +725,7 @@ public class CryDetectionService extends Service {
         unregisterPhoneStateListener();
         restoreInCallAudioSettings();
         restoreRingerVolume();
-        getSharedPreferences(MainActivity.PREFS_NAME, MODE_PRIVATE)
-                .edit().putBoolean(MainActivity.KEY_RUNNING, false).apply();
+        getSharedPreferences(AppPrefs.PREFS_NAME, MODE_PRIVATE)
+                .edit().putBoolean(AppPrefs.KEY_RUNNING, false).apply();
     }
 }

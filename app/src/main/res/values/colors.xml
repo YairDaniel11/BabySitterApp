@@ -2,7 +2,9 @@
 <resources>
     <!-- פלטת הצבעים הזו מבוססת על מה שנמצא בפועל באפליקציה אמיתית שרצה על
          מכשיר שיאומי מקשים: רקע כהה, header שחור עם רצועת אקסנט טורקיז,
-         טקסט לבן/אפור בהיר. עיצוב שטוח לגמרי, בלי צללים/גרדיאנטים. -->
+         טקסט לבן/אפור בהיר. עיצוב שטוח לגמרי, בלי צללים/גרדיאנטים.
+         הצבעים האלה משמשים כערכי הבסיס של ערכת הנושא הכהה (AppTheme.Dark) -
+         ראו styles.xml + attrs.xml למנגנון בחירת ערכת הנושא (סעיף ד'). -->
     <color name="bg_dark">#FF2B2E33</color>
     <color name="header_black">#FF000000</color>
     <color name="accent_teal">#FF00BCD4</color>
@@ -11,11 +13,22 @@
     <color name="divider_gray">#FF444444</color>
     <color name="row_gray">#FF3A3E44</color>
 
+    <!-- ערכי הבסיס של ערכת הנושא הבהירה (AppTheme.Light) - נבחרו לשמור על
+         אותו אקסנט טורקיז בדיוק (מיתוג אחיד), עם רקעים בהירים וטקסט כהה
+         במקום ההפך, וניגודיות מספקת לקריאות. -->
+    <color name="bg_light">#FFF4F4F6</color>
+    <color name="header_light">#FFFFFFFF</color>
+    <color name="text_dark">#FF1A1A1A</color>
+    <color name="text_gray_dark">#FF5A5A5A</color>
+    <color name="divider_light">#FFD8D8DC</color>
+    <color name="row_light">#FFE6E6EA</color>
+
     <!-- הצ'קבוקסים במסך לא מוגדרים עם צבע מותאם אישית - הם משתמשים ב-tint
          ברירת המחדל של הפלטפורמה (הוי הירוק הסטנדרטי של אנדרואיד ל-CheckBox/
          RadioButton מסומן). הפניה לאותו צבע פלטפורמה בדיוק, כדי שמסגרת
          הפוקוס תתאים בול לצבע ה-V הירוק שרואים בסימון תיבות הסימון. אם בפועל
          במכשיר היעד (שיאומי מקשים) ה-tint נראה מעט שונה בגלל עיצוב יצרן
-         משלו - פשוט שנו כאן לצבע ה-HEX המדויק שנצפה שם. -->
+         משלו - פשוט שנו כאן לצבע ה-HEX המדויק שנצפה שם. משותף לשתי ערכות
+         הנושא (לא תלוי בהיר/כהה). -->
     <color name="focus_green">@android:color/holo_green_light</color>
 </resources>

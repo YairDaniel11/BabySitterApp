@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- אותו רקע עגול, אבל אדום - למצב "פעיל" (מאזין) של הכפתור המרכזי הגדול.
+     ראו bg_toggle_idle.xml להסבר המלא. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="#FFD32F2F" />
+            <stroke
+                android:width="3dp"
+                android:color="@color/focus_green" />
+        </shape>
+    </item>
+
+    <item android:state_pressed="true">
+        <shape android:shape="oval">
+            <solid android:color="#FFD32F2F" />
+            <stroke
+                android:width="3dp"
+                android:color="@color/focus_green" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#FFD32F2F" />
+        </shape>
+    </item>
+
+</selector>
